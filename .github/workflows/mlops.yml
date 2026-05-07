@@ -66,6 +66,22 @@ jobs:
       - name: Pull data with DVC
         run: dvc pull data/train_phase1.csv.dvc data/eval.csv.dvc
 
+      - name: Configure remote MLflow tracking
+        run: |
+          if [ -n "${{ secrets.MLFLOW_TRACKING_URI }}" ]; then
+            echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" >> $GITHUB_ENV
+            echo "Using remote MLflow tracking server."
+          else
+            echo "MLFLOW_TRACKING_URI=sqlite:///mlflow.db" >> $GITHUB_ENV
+            echo "Using local SQLite MLflow tracking."
+          fi
+          if [ -n "${{ secrets.MLFLOW_TRACKING_USERNAME }}" ]; then
+            echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ secrets.MLFLOW_TRACKING_PASSWORD }}" ]; then
+            echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}" >> $GITHUB_ENV
+          fi
+
       - name: Train model
         run: python src/train.py
 
