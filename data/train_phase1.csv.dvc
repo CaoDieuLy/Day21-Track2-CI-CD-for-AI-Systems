@@ -1,3 +1,5 @@
+meta:
+  step3_trigger: "continuous training data refresh"
 outs:
 - md5: 6453f2f5cac61359410969b8708a1b22
   size: 377904
