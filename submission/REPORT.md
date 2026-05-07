@@ -16,14 +16,14 @@ min_samples_split: 2
 Evaluation result:
 
 ```text
-accuracy = 0.7460
-f1_score = 0.7449
+accuracy = 0.7480
+f1_score = 0.7472
 ```
 
 This configuration was selected because it produced the highest held-out
-evaluation accuracy among the MLflow runs. The first phase of training reached
-about 0.682 accuracy, while adding the second training phase increased accuracy
-to 0.746 and passed the 0.70 deployment gate.
+evaluation accuracy among the MLflow and CI runs. The first phase of training
+reached about 0.682 accuracy, while continuous-training data updates increased
+accuracy to 0.748 and passed the 0.70 deployment gate.
 
 ## Difficulties And Solutions
 
@@ -39,5 +39,5 @@ name conflict. A dedicated `mlops` user and SSH deploy key were configured
 instead.
 
 The first model trained only on `train_phase1.csv` did not pass the 0.70 gate.
-After the DVC-tracked continuous-training update, `train_phase1.csv` contained
-5996 samples and the model passed the gate with 0.746 accuracy.
+After the DVC-tracked continuous-training updates, `train_phase1.csv` contained
+6156 samples and the model passed the gate with 0.748 accuracy.
