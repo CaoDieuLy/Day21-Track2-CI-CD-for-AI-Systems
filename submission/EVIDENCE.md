@@ -11,7 +11,7 @@ https://github.com/CaoDieuLy/Day21-Track2-CI-CD-for-AI-Systems
 Public VM IP:
 
 ```text
-34.133.240.174
+34.134.253.171
 ```
 
 Health:
@@ -58,7 +58,6 @@ Objects:
 ```text
 gs://vin-mlops-lab-757312350-bucket/dvc/files/md5/58/53e7711c78f02286e65fca6cb6e124
 gs://vin-mlops-lab-757312350-bucket/dvc/files/md5/b1/1de6b7adaa93a44278fd7e168b2288
-gs://vin-mlops-lab-757312350-bucket/dvc/files/md5/c4/3afab731fd6431a94f888fdc687876
 gs://vin-mlops-lab-757312350-bucket/dvc/files/md5/fd/073d6651b2ff224c0da1eb1c049a32
 gs://vin-mlops-lab-757312350-bucket/models/latest/model.pkl
 gs://vin-mlops-lab-757312350-bucket/outputs/latest/metrics.json
@@ -87,4 +86,14 @@ Bonus 2: Multiple algorithms supported through model_type.
 Bonus 3: Automated report written to outputs/report.txt and uploaded as artifact.
 Bonus 4: Rollback guard compares new accuracy against deployed metrics in GCS.
 Bonus 5: Label distribution is logged and saved in metrics.json.
+```
+
+## CI/CD Cloud Auth
+
+GitHub Actions is configured to authenticate to GCP through Workload Identity
+Federation:
+
+```text
+projects/141571983280/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+mlops-lab-sa@vin-mlops-lab-757312350.iam.gserviceaccount.com
 ```

@@ -4,10 +4,24 @@ on:
   push:
     branches: [main, master]
     paths:
+      - '.github/workflows/mlops.yml'
       - 'data/**.dvc'
       - 'src/**.py'
       - 'params.yaml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: vin-mlops-lab-757312350
+  GCP_PROJECT_NUMBER: "141571983280"
+  GCP_ZONE: us-central1-a
+  GCE_INSTANCE: mlops-serve
+  CLOUD_BUCKET: vin-mlops-lab-757312350-bucket
+  GCP_SERVICE_ACCOUNT: mlops-lab-sa@vin-mlops-lab-757312350.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/141571983280/locations/global/workloadIdentityPools/github-pool/providers/github-provider
 
 jobs:
 
@@ -56,12 +70,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Authenticate to Cloud Storage
-        run: |
-          cat > sa-key.json <<'EOF'
-          ${{ secrets.CLOUD_CREDENTIALS }}
-          EOF
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/sa-key.json" >> $GITHUB_ENV
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Pull data with DVC
         run: dvc pull data/train_phase1.csv.dvc data/eval.csv.dvc
@@ -124,12 +137,11 @@ jobs:
         with:
           name: model-outputs
 
-      - name: Authenticate to Cloud Storage
-        run: |
-          cat > sa-key.json <<'EOF'
-          ${{ secrets.CLOUD_CREDENTIALS }}
-          EOF
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/sa-key.json" >> $GITHUB_ENV
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: Check eval gate and rollback guard
         run: |
@@ -164,7 +176,7 @@ jobs:
           print(f"PASSED: promoted model to gs://{bucket_name}/models/latest/model.pkl")
           EOF
         env:
-          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
+          CLOUD_BUCKET: ${{ env.CLOUD_BUCKET }}
 
 
   # ---------------------------------------------------------------------------
@@ -178,19 +190,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - name: SSH deploy to VM
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            sudo systemctl restart mlops-serve
-            for i in 1 2 3 4 5 6; do
-              if curl -sf http://localhost:8000/health; then
-                break
-              fi
-              sleep 5
-            done
-            curl -sf http://localhost:8000/health
-            echo "Health check passed."
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Restart service on VM
+        run: |
+          gcloud compute ssh "${GCE_INSTANCE}" \
+            --zone "${GCP_ZONE}" \
+            --project "${GCP_PROJECT_ID}" \
+            --quiet \
+            --command "sudo systemctl restart mlops-serve && for i in 1 2 3 4 5 6; do if curl -sf http://localhost:8000/health; then break; fi; sleep 5; done; curl -sf http://localhost:8000/health; echo 'Health check passed.'"

@@ -48,9 +48,9 @@ Screenshot requirements:
 Run:
 
 ```powershell
-curl.exe http://34.133.240.174:8000/health
+curl.exe http://34.134.253.171:8000/health
 $body = @{ features = @(7.4, 0.70, 0.00, 1.9, 0.076, 11.0, 34.0, 0.9978, 3.51, 0.56, 9.4, 0) } | ConvertTo-Json
-Invoke-RestMethod -Uri http://34.133.240.174:8000/predict -Method Post -ContentType 'application/json' -Body $body
+Invoke-RestMethod -Uri http://34.134.253.171:8000/predict -Method Post -ContentType 'application/json' -Body $body
 ```
 
 Screenshot requirements:
