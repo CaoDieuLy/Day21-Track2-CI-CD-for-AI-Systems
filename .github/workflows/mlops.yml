@@ -75,27 +75,14 @@ jobs:
           ACC=$(python -c "import json; d=json.load(open('outputs/metrics.json')); print(d['accuracy'])")
           echo "accuracy=$ACC" >> $GITHUB_OUTPUT
 
-      - name: Upload model to Cloud Storage
-        run: |
-          python - <<'EOF'
-          import os
-          from google.cloud import storage
-
-          bucket_name = os.environ["CLOUD_BUCKET"]
-          client = storage.Client()
-          bucket = client.bucket(bucket_name)
-          blob = bucket.blob("models/latest/model.pkl")
-          blob.upload_from_filename("models/model.pkl")
-          print(f"Uploaded model to gs://{bucket_name}/models/latest/model.pkl")
-          EOF
-        env:
-          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
-
-      - name: Save metrics as artifact
+      - name: Save model and reports as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: metrics
-          path: outputs/metrics.json
+          name: model-outputs
+          path: |
+            models/model.pkl
+            outputs/metrics.json
+            outputs/report.txt
 
 
   # ---------------------------------------------------------------------------
@@ -109,15 +96,59 @@ jobs:
     needs: train
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-      - name: Check eval gate
+      - name: Install cloud dependency
+        run: pip install google-cloud-storage==2.16.0
+
+      - name: Download model outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: model-outputs
+
+      - name: Authenticate to Cloud Storage
+        run: |
+          cat > sa-key.json <<'EOF'
+          ${{ secrets.CLOUD_CREDENTIALS }}
+          EOF
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GITHUB_WORKSPACE/sa-key.json" >> $GITHUB_ENV
+
+      - name: Check eval gate and rollback guard
         run: |
           python - <<'EOF'
+          import json
+          import os
+          from google.cloud import storage
+
           acc = float("${{ needs.train.outputs.accuracy }}")
           if acc < 0.70:
               raise SystemExit(f"FAILED: accuracy {acc:.4f} < 0.70. Huy deploy.")
-          print(f"PASSED: accuracy {acc:.4f} >= 0.70. Dang trien khai model.")
+
+          bucket_name = os.environ["CLOUD_BUCKET"]
+          client = storage.Client()
+          bucket = client.bucket(bucket_name)
+          previous_blob = bucket.blob("outputs/latest/metrics.json")
+
+          if previous_blob.exists():
+              previous = json.loads(previous_blob.download_as_text())
+              previous_acc = float(previous["accuracy"])
+              print(f"Previous deployed accuracy: {previous_acc:.4f}")
+              if acc < previous_acc:
+                  raise SystemExit(
+                      f"FAILED: accuracy {acc:.4f} < previous {previous_acc:.4f}. Huy deploy."
+                  )
+          else:
+              print("No previous deployed metrics found. This will be the first deployment.")
+
+          bucket.blob("models/latest/model.pkl").upload_from_filename("models/model.pkl")
+          bucket.blob("outputs/latest/metrics.json").upload_from_filename("outputs/metrics.json")
+          bucket.blob("outputs/latest/report.txt").upload_from_filename("outputs/report.txt")
+          print(f"PASSED: promoted model to gs://{bucket_name}/models/latest/model.pkl")
           EOF
+        env:
+          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
 
 
   # ---------------------------------------------------------------------------
@@ -139,6 +170,11 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             sudo systemctl restart mlops-serve
-            sleep 5
+            for i in 1 2 3 4 5 6; do
+              if curl -sf http://localhost:8000/health; then
+                break
+              fi
+              sleep 5
+            done
             curl -sf http://localhost:8000/health
             echo "Health check passed."
